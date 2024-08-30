@@ -138,7 +138,7 @@ async def process_data(files, jd_json, additional_inputs):
         }}
         """
 
-        response_text = get_openai_response(third_prompt)
+        response_text = await get_openai_response(third_prompt)
 
     return response_text.strip()
 

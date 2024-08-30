@@ -7,7 +7,7 @@ import openai
 from openai import AzureOpenAI
 import datetime
 from dotenv import load_dotenv
-import utils_async
+import utils
 
 
 load_dotenv()
@@ -30,5 +30,5 @@ openai.api_key = api_key
 
 
 if __name__ == "__main__":
-    utils_async.main()
+    utils.main()
  

@@ -1,15 +1,23 @@
-import os, re, json
+import os, re, json, io
 from io import StringIO
 from pathlib import Path
 import pdfplumber
 import docx2txt
-import pypandoc
+#import pypandoc
 import pandas as pd
 import streamlit as st
 import openai
 from openai import AzureOpenAI
 import datetime
 from dotenv import load_dotenv
+import tempfile
+#import mammoth
+from docx import Document
+#import win32com.client as win32
+#import pythoncom
+import logging
+#import subprocess
+#import requests
 
 load_dotenv()
 
@@ -75,22 +83,102 @@ def extract_docx_text(uploaded_file):
     text_data=[{'paragraphs':paragraphs}]
     return text_data
 
+# @st.cache_data
+# def convert_doc_to_docx(doc_path):
+    
+#     docx_path = doc_path.replace(".doc", ".docx")
+#     print('docx path is :'+ docx_path)
+#     subprocess.run(['unoconv', '-f', 'docx', doc_path], check=True)
+#     print('docx path after conversion is :'+ docx_path)
+#     return docx_path
 
-@st.cache_data
-def extract_doc_text(uploaded_file):
-    print('1')
-    #convert doc to docx as doc is old format its hard to directly extract text
-    docx_file=f"/tmp/{os.path.basename(uploaded_file.name).replace('.doc','.docx')}"
-    print('1')
-    pypandoc.convert_file(uploaded_file,'docx',outputfile=docx_file)
-    print('1')
-    text_data=extract_docx_text(docx_file)
-    print('1')
-    #delete converted docx file which in no longer needed
-    os.remove(docx_file)
-    print('1')
-    return text_data
+# def convert_doc_to_docx(doc_path):
+#     url = 'http://localhost:8000/convert'
+#     files = {'file': open(doc_path, 'rb')}
+#     response = requests.post(url, files=files)
+    
+#     if response.status_code == 200:
+#         output_path = doc_path.replace(".doc", ".docx")
+#         with open(output_path, 'wb') as f:
+#             f.write(response.content)
+#         return output_path
+#     else:
+#         raise Exception(f"Conversion failed: {response.text}")
 
+# def extract_doc_text(uploaded_file):
+#     # Create a temporary file to save the uploaded DOC file
+#     with tempfile.NamedTemporaryFile(delete=False, suffix=".doc") as temp_doc:
+#         temp_doc.write(uploaded_file.read())
+#         temp_doc_path = temp_doc.name
+#     #print('temp doc is :'+temp_doc)
+#     print('temp doc path is :'+temp_doc_path)
+
+#     # Convert the DOC file to DOCX using unoconv
+#     temp_docx_path = convert_doc_to_docx(temp_doc_path)
+#     print('temp docx path is :'+temp_docx_path)
+
+#     # Load the DOCX file and extract text
+#     document = Document(temp_docx_path)
+#     full_text = "\n\n".join([para.text for para in document.paragraphs])
+#     print('extracted full text is:'+full_text)
+
+#     # Split the full text into paragraphs and format as requested
+#     paragraphs = full_text.split('\n\n')
+#     text_data = [{'paragraphs': paragraphs}]
+
+#     # Clean up temporary files
+#     if os.path.exists(temp_doc_path):
+#         os.remove(temp_doc_path)
+#     if os.path.exists(temp_docx_path):
+#         os.remove(temp_docx_path)
+
+#     return text_data
+
+# def extract_doc_text(uploaded_file):
+#     # Create a temporary file to save the uploaded DOC file
+#     with tempfile.NamedTemporaryFile(delete=False, suffix=".doc") as temp_doc:
+#         temp_doc.write(uploaded_file.read())
+#         temp_doc_path = temp_doc.name
+#     print(temp_doc)
+#     print(temp_doc_path)
+#     # Convert the DOC file to DOCX using Mammoth
+#     with open(temp_doc_path, "rb") as doc_file:
+#         result = mammoth.convert_to_html(doc_file)
+#         full_text = result.value  # The text as a string
+#     print(full_text)
+#     # Optional: Process the HTML if needed, here we are keeping it simple
+#     paragraphs = full_text.split('\n\n')
+#     text_data = [{'paragraphs': paragraphs}]
+#     print(text_data)
+  
+#     # Clean up temporary file
+#     os.remove(temp_doc_path)
+#     print(temp_doc_path)
+#     return text_data
+# # def extract_doc_text(uploaded_file):
+# #     # Create a temporary file to save the uploaded DOC file
+# #     with tempfile.NamedTemporaryFile(delete=False, suffix=".doc") as temp_doc:
+# #         temp_doc.write(uploaded_file.read())
+# #         temp_doc_path = temp_doc.name
+
+# #     # Convert the DOC file to DOCX using pypandoc
+# #     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as temp_docx:
+# #         temp_docx_path = temp_docx.name
+# #         pypandoc.convert_file(temp_doc_path, 'docx', outputfile=temp_docx_path)
+
+# #     # Load the DOCX file and extract text
+# #     document = Document(temp_docx_path)
+# #     full_text = "\n\n".join([para.text for para in document.paragraphs])
+
+# #     # Split the full text into paragraphs and format as requested
+# #     paragraphs = full_text.split('\n\n')
+# #     text_data = [{'paragraphs': paragraphs}]
+
+# #     # Clean up temporary files
+# #     os.remove(temp_doc_path)
+# #     os.remove(temp_docx_path)
+
+# #     return text_data
 
 @st.cache_data
 def process_resume(resume_files, jd, additional_inputs):
@@ -117,8 +205,8 @@ def process_resume(resume_files, jd, additional_inputs):
             resume_text = extract_pdf_text(files)
         elif ext == ".docx":
             resume_text = extract_docx_text(files)
-        elif ext == ".doc":
-            resume_text = extract_doc_text(files)
+        #elif ext == ".doc":
+            #resume_text = extract_doc_text(files)
         else:
             raise ValueError("Unsopported file type: {}".format(ext))
 
@@ -195,7 +283,7 @@ def main():
     with st.sidebar:
         with st.form('Resume Parsing Configuration'):
             st.header("Provide Resume, JD & Details")
-            uploaded_files = st.file_uploader("Upload Profiles", accept_multiple_files=True, type=['doc', 'docx', 'pdf'])
+            uploaded_files = st.file_uploader("Upload Profiles", accept_multiple_files=True, type=[ 'docx', 'pdf'])
             #folder_path = st.text_input("Path to Resume Folder")
             jd = st.text_area("Job Description (JD)", height=200)
             additional_inputs = st.text_area("Additional Inputs (Optional)", height=100)

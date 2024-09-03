@@ -1,16 +1,14 @@
-import os, re, json
+import os, re, json, io
 from io import StringIO
 from pathlib import Path
 import pdfplumber
+import docx2txt
 import pandas as pd
 import streamlit as st
 import openai
 from openai import AzureOpenAI
 import datetime
 from dotenv import load_dotenv
-
-
-
 
 load_dotenv()
 
@@ -59,19 +57,28 @@ def get_openai_response(input_prompt):
     return insight_text.choices[0].message.content
 
 @st.cache_data
-def input_pdf_text(uploaded_file):
+def extract_pdf_text(uploaded_file):
     with pdfplumber.open(uploaded_file) as pdf:
         text_data = []
         for page_num, page in enumerate(pdf.pages):
             text = page.extract_text()
-            paragraphs = re.split(r'\n\s*\n', text)
+            paragraphs = re.split(r'\n\s*\n', text)   ###re???
             text_data.append({"page_number": page_num + 1, "paragraphs": paragraphs})
+    return text_data
+
+
+@st.cache_data
+def extract_docx_text(uploaded_file):
+    text=docx2txt.process(uploaded_file)
+    paragraphs=text.split('\n\n')
+    text_data=[{'paragraphs':paragraphs}]
     return text_data
 
 @st.cache_data
 def process_resume(resume_files, jd, additional_inputs):
     print('Extracting Information from Resume')
     results = []
+
 
     first_prompt = f"""
     **Objective:** conversion of Job description to checklist for Resume shortlisting
@@ -81,74 +88,83 @@ def process_resume(resume_files, jd, additional_inputs):
     """
     jd_json  = get_openai_response(first_prompt)
 
+
     for files in resume_files:
         ext = Path(files.name).suffix
         print(ext)
+        ext = Path(files.name).suffix.lower()
+        print(ext)
         if ext == ".pdf":
             #text_bytes=StringIO(files.getvalue().decode("utf-8"))
-            resume_text = input_pdf_text(files)
+            resume_text = extract_pdf_text(files)
+        elif ext == ".docx":
+            resume_text = extract_docx_text(files)
+        #elif ext == ".doc":
+            #resume_text = extract_doc_text(files)
+        else:
+            raise ValueError("Unsopported file type: {}".format(ext))
 
-            paragraphs = []
-            for page_data in resume_text:
-                paragraphs.extend(page_data["paragraphs"])
+    paragraphs = []
+    for page_data in resume_text:
+        paragraphs.extend(page_data["paragraphs"])
 
-            second_prompt = """
-            **Objective:** conversion of resume to a JSON with essential details 
-            **Input:** The input is a detailed resume: {0}
-            **Steps:** Look for details like Project, skills, experience etc and make sure they are part of the output created as json
-            **Output:** the detailed resume should be converted to a JSON which has all relevant details required for shortlisting, Critical skills, experiences, etc
-            """.format('\n'.join(paragraphs))
-            resume_json  = get_openai_response(second_prompt)
+    second_prompt = """
+    **Objective:** conversion of resume to a JSON with essential details 
+    **Input:** The input is a detailed resume: {0}
+    **Steps:** Look for details like Project, skills, experience etc and make sure they are part of the output created as json
+    **Output:** the detailed resume should be converted to a JSON which has all relevant details required for shortlisting, Critical skills, experiences, etc
+    """.format('\n'.join(paragraphs))
+    resume_json  = get_openai_response(second_prompt)
+    
+    third_prompt = f"""
+    Evaluate and be accurate in selection of the following resume based on the given job description checklist and additional input.
+    
+    **Objective:** Accurate Resume shortlisting 
+    
+    **Focus:** You need to look at the Job description Checklist and the Resume to arrive at the final decision
+    
+    **Selection:** You cannot go wrong, evaluate resume for each critical skill mentioned in Job description to arrive at the final decision
+    
+    **You need to provide 3 reasons for your selection decision
+     **Primary Skills: Identify the primary skills of the candidate from his profile/resume.
+     **Secondary Skills: Identify the secondary skills of the candidate from his profile/resume.
+     **Entity Recognition: Identify Personally Identifiable information of the candidate, specifically Name, email and phone number if available. Do not make these up if unavailable.
+     
+     **Output:**
+     * **Score:** Percentage of "must-have" skills matched (float)
+     * **Name:** Name of the candidate ({files.name})
+     * **Contact:** Contact Details of the candidate.
+     * **Primary Skills: Primary skills of the candidate separated by commas.
+     * **Secondary Skills: Secondary skills of the candidate separated by commas.
+     **Selection:** Categorize the candidate as "Strong Match," "Potential Match," or "Not a Match" based on the following criteria:
+     
+        * **Strong Match:** Meets or exceeds all critical skills and most preferred skills. 
+        * **Potential Match:** Meets most critical skills and some preferred skills. May need additional training for some skills.
+        * **Not a Match:** Lacks several critical skills or has limited experience in Data Engineering, ML, and Generative AI. 
+     
+     **Reasons:** Provide three reasons in bullets for the selection decision
+     
+     **Input:**
+     Resume: {resume_json}
+     Job Description: {jd_json}
+     Additional input: {additional_inputs}
+     
+     I want the response as a JSON object with the following structure. DO not add any other text to the response apart from the json:
+    {{
+    "Selection": "Strong Match",
+    "Score": 90.0,
+    "Name": "Matthew Bordin",
+    "Contact-Email": "mattbn34@xyz.com", 
+    "Contact-Phone": "+44-454536456",
+    "resume": "{files.name}",
+    "Primary-Skills": "Python, DBT, Airflow",
+    "Secondary-Skills": "AWS, Azure, DevOps",
+    "Reasons": ["","",""]
+    }}
+    """
 
-            third_prompt = f"""
-            Evaluate and be accurate in selection of the following resume based on the given job description checklist and additional input.
-
-            **Objective:** Accurate Resume shortlisting 
-
-            **Focus:** You need to look at the Job description Checklist and the Resume to arrive at the final decision
-
-            **Selection:** You cannot go wrong, evaluate resume for each critical skill mentioned in Job description to arrive at the final decision
-
-            **You need to provide 3 reasons for your selection decision
-             **Primary Skills: Identify the primary skills of the candidate from his profile/resume.
-             **Secondary Skills: Identify the secondary skills of the candidate from his profile/resume.
-             **Entity Recognition: Identify Personally Identifiable information of the candidate, specifically Name, email and phone number if available. Do not make these up if unavailable.
-
-            **Output:**
-            * **Score:** Percentage of "must-have" skills matched (float)
-            * **Name:** Name of the candidate ({files.name})
-            * **Contact:** Contact Details of the candidate.
-            * **Primary Skills: Primary skills of the candidate separated by commas.
-            * **Secondary Skills: Secondary skills of the candidate separated by commas.
-            **Selection:** Categorize the candidate as "Strong Match," "Potential Match," or "Not a Match" based on the following criteria:
-
-                * **Strong Match:** Meets or exceeds all critical skills and most preferred skills. 
-                * **Potential Match:** Meets most critical skills and some preferred skills. May need additional training for some skills.
-                * **Not a Match:** Lacks several critical skills or has limited experience in Data Engineering, ML, and Generative AI. 
-
-            **Reasons:** Provide three reasons in bullets for the selection decision
-
-            **Input:**
-            Resume: {resume_json}
-            Job Description: {jd_json}
-            Additional input: {additional_inputs}
-
-            I want the response as a JSON object with the following structure. DO not add any other text to the response apart from the json:
-            {{
-            "Selection": "Strong Match",
-            "Score": 90.0,
-            "Name": "Matthew Bordin",
-            "Contact-Email": "mattbn34@xyz.com", 
-            "Contact-Phone": "+44-454536456",
-            "resume": "{files.name}",
-            "Primary-Skills": "Python, DBT, Airflow",
-            "Secondary-Skills": "AWS, Azure, DevOps",
-            "Reasons": ["","",""]
-            }}
-            """
-
-            response_text = get_openai_response(third_prompt)
-            results.append(response_text.strip())
+    response_text = get_openai_response(third_prompt)
+    results.append(response_text.strip())
 
     print(type(results))
     return results
@@ -161,7 +177,7 @@ def main():
     with st.sidebar:
         with st.form('Resume Parsing Configuration'):
             st.header("Provide Resume, JD & Details")
-            uploaded_files = st.file_uploader("Upload Profiles", accept_multiple_files=True, type=['doc', 'docx', 'pdf'])
+            uploaded_files = st.file_uploader("Upload Profiles", accept_multiple_files=True, type=[ 'docx', 'pdf'])
             #folder_path = st.text_input("Path to Resume Folder")
             jd = st.text_area("Job Description (JD)", height=200)
             additional_inputs = st.text_area("Additional Inputs (Optional)", height=100)

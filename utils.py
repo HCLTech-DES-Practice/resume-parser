@@ -33,28 +33,24 @@ def color_selection(val):
 
 @st.cache_data
 def get_openai_response(input_prompt):
-    AzureOpenAIclient = AzureOpenAI(
-        azure_endpoint=openai.api_base,
-        api_key=openai.api_key,
-        api_version=openai.api_version,
-        azure_deployment=deployement_name
-    )
-
+    client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
+    llm="microsoft/Phi-3-mini-4k-instruct-q4.gguf"
     messages=[
         {"role": "system", "content": "You are a skilled ATS (Application Tracking System) with a deep understanding of tech fields, software engineering, data science, data analysis, and big data. You provide the best assistance for resume selection based on job descriptions."},
         {"role": "user", "content": input_prompt}
     ]
-
-    insight_text = AzureOpenAIclient.chat.completions.create(
+ 
+    insight_text = client.chat.completions.create(
         messages=messages,
-        model="gpt-4o-mini",
+        model=llm,
         temperature=0,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0,
     )
-
-    return insight_text.choices[0].message.content
+    print(insight_text.choices[0].message)
+    return insight_text.choices[0].message
+    #return insight_text.choices[0].message.content
 
 @st.cache_data
 def extract_pdf_text(uploaded_file):

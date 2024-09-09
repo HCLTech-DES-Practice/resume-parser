@@ -9,6 +9,7 @@ import openai
 from openai import AzureOpenAI
 import datetime
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -25,7 +26,9 @@ openai.api_base = api_base
 openai.api_version = api_version
 openai.api_key = api_key
 
-
+from openai import OpenAI
+ 
+# Point to the local server
 
 def color_selection(val):
     color = 'green' if val=='Strong Match' else 'yellow' if val=='Potential Match' else 'red' 
@@ -34,7 +37,7 @@ def color_selection(val):
 @st.cache_data
 def get_openai_response(input_prompt):
     client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
-    llm="microsoft/Phi-3-mini-4k-instruct-q4.gguf"
+    llm="lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF"
     messages=[
         {"role": "system", "content": "You are a skilled ATS (Application Tracking System) with a deep understanding of tech fields, software engineering, data science, data analysis, and big data. You provide the best assistance for resume selection based on job descriptions."},
         {"role": "user", "content": input_prompt}
@@ -49,8 +52,8 @@ def get_openai_response(input_prompt):
         presence_penalty=0,
     )
     print(insight_text.choices[0].message)
-    return insight_text.choices[0].message
-    #return insight_text.choices[0].message.content
+    #return insight_text.choices[0].message
+    return insight_text.choices[0].message.content
 
 @st.cache_data
 def extract_pdf_text(uploaded_file):
@@ -179,10 +182,11 @@ def main():
             additional_inputs = st.text_area("Additional Inputs (Optional)", height=100)
             extract_PII = st.toggle('Show Contact Information')
             submit_button = st.form_submit_button('Submit')
-    
+    t0 = time.time()
     if uploaded_files and jd and submit_button:
         print('config set - running job')
         results = process_resume(uploaded_files, jd, additional_inputs)
+        print(results)
         counter=0
         if results:
             print('Processing extracted Information')
@@ -245,7 +249,8 @@ def main():
             st.write("No resumes found in the specified folder.")
     else:
         print('Mandatory Config Not provided yet')
-
+    t1 = time.time()
+    print(t1-t0)
     with st.sidebar:
         st.image("./img/logo.png")
         

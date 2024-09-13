@@ -37,7 +37,8 @@ def color_selection(val):
 @st.cache_data
 def get_openai_response(input_prompt):
     client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
-    llm="lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF"
+    #llm="Orenguteng/Llama-3.1-8B-Lexi-Uncensored_V2_Q8.gguf"
+    llm="lmstudio-community/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
     messages=[
         {"role": "system", "content": "You are a skilled ATS (Application Tracking System) with a deep understanding of tech fields, software engineering, data science, data analysis, and big data. You provide the best assistance for resume selection based on job descriptions."},
         {"role": "user", "content": input_prompt}
